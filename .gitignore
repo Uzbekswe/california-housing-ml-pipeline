@@ -1,5 +1,5 @@
-# Artifacts (ML models)
-artifacts/*.joblib
+# Artifacts (ML models) - Using Git LFS for large model files
+# artifacts/*.joblib  # Commented out - now using Git LFS
 
 # Python
 __pycache__/
