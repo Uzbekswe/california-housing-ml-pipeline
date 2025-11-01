@@ -27,6 +27,56 @@ def load_explainer():
     model = pipeline.named_steps['model']
     return shap.TreeExplainer(model)
 
+# === Conversion Presets for User-Friendly Inputs ===
+CONVERSION_PRESETS = {
+    "house_size": {
+        "Small (1-2 BR)": {"rooms": 5, "bedrooms": 2},
+        "Medium (3 BR)": {"rooms": 7, "bedrooms": 3},
+        "Large (4+ BR)": {"rooms": 10, "bedrooms": 4}
+    },
+    "area_type": {
+        "Urban (City)": {"households": 200, "density": 3.2},
+        "Suburban": {"households": 120, "density": 2.5},
+        "Rural": {"households": 50, "density": 2.8}
+    },
+    "income_level": {
+        "Low ($30-50k)": 4.0,
+        "Middle ($50-80k)": 6.5,
+        "High ($80k+)": 9.0
+    },
+    "house_age": {
+        "New (0-10 yrs)": 5,
+        "Modern (10-30 yrs)": 20,
+        "Old (30+ yrs)": 45
+    }
+}
+
+def convert_simple_to_census(house_size, area_type, income_level, house_age, ocean_proximity, latitude, longitude):
+    """Convert user-friendly inputs to census block data"""
+    # Get presets
+    size_preset = CONVERSION_PRESETS["house_size"][house_size]
+    area_preset = CONVERSION_PRESETS["area_type"][area_type]
+    income = CONVERSION_PRESETS["income_level"][income_level]
+    age = CONVERSION_PRESETS["house_age"][house_age]
+    
+    # Calculate census block aggregates
+    households = area_preset["households"]
+    total_rooms = size_preset["rooms"] * households
+    total_bedrooms = size_preset["bedrooms"] * households
+    population = area_preset["density"] * households
+    
+    return {
+        "longitude": longitude,
+        "latitude": latitude,
+        "housing_median_age": age,
+        "total_rooms": total_rooms,
+        "total_bedrooms": total_bedrooms,
+        "population": population,
+        "households": households,
+        "median_income": income,
+        "ocean_proximity": ocean_proximity
+    }
+
 # === Page config must be FIRST ===
 st.set_page_config(
     page_title="California Housing Price Predictor",
@@ -65,6 +115,8 @@ if 'input_data' not in st.session_state:
     st.session_state.input_data = None
 if 'prepared_data' not in st.session_state:
     st.session_state.prepared_data = None
+if 'census_data' not in st.session_state:
+    st.session_state.census_data = None
 
 # === Custom transformers (kept only for input UI consistency) ===
 rooms_ix, bedrooms_ix, population_ix, household_ix = 3, 4, 5, 6
@@ -104,29 +156,128 @@ tab1, tab2, tab3, tab4 = st.tabs(["🏡 Predict Price", "🌍 Map View", "🔍 E
 
 # === TAB 1: Prediction ===
 with tab1:
-    col1, col2 = st.columns(2)
-
-    with col1:
-        longitude = st.number_input("Longitude", value=-122.23, key="long")
-        latitude = st.number_input("Latitude", value=37.88, key="lat")
-        housing_median_age = st.number_input("Housing Median Age", value=41.0)
-        total_rooms = st.number_input("Total Rooms", value=880.0)
-
-    with col2:
-        total_bedrooms = st.number_input("Total Bedrooms", value=129.0)
-        population = st.number_input("Population", value=322.0)
-        households = st.number_input("Households", value=126.0)
-        median_income = st.number_input("Median Income", value=8.3252)
-        ocean_proximity = st.selectbox(
-            "Ocean Proximity",
-            ["NEAR BAY", "<1H OCEAN", "INLAND", "NEAR OCEAN", "ISLAND"],
-            index=0
+    # Input mode selector
+    input_mode = st.radio(
+        "**Choose Input Mode:**",
+        ["🏡 Simple Mode (Recommended)", "📊 Advanced Mode (Census Data)"],
+        horizontal=True,
+        help="Simple mode for individual houses, Advanced mode for census block data"
+    )
+    
+    if input_mode == "🏡 Simple Mode (Recommended)":
+        st.write("### Enter Your Property Details")
+        st.write("*We'll estimate neighborhood statistics based on your inputs*")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**📍 Location**")
+            latitude = st.number_input("Latitude", value=37.88, key="lat_simple", 
+                                      help="North-South position (32-42 for California)")
+            longitude = st.number_input("Longitude", value=-122.23, key="long_simple",
+                                       help="East-West position (-125 to -114 for California)")
+            ocean_proximity = st.selectbox(
+                "Ocean Proximity",
+                ["NEAR BAY", "<1H OCEAN", "INLAND", "NEAR OCEAN", "ISLAND"],
+                index=0,
+                help="How close to the ocean?"
+            )
+            
+            st.write("**🏠 Your House**")
+            house_size = st.selectbox(
+                "House Size",
+                list(CONVERSION_PRESETS["house_size"].keys()),
+                index=1,
+                help="Approximate size based on bedrooms"
+            )
+            house_age = st.selectbox(
+                "House Age",
+                list(CONVERSION_PRESETS["house_age"].keys()),
+                index=1,
+                help="How old is the property?"
+            )
+        
+        with col2:
+            st.write("**🌆 Neighborhood**")
+            area_type = st.selectbox(
+                "Area Type",
+                list(CONVERSION_PRESETS["area_type"].keys()),
+                index=1,
+                help="Urban = city center, Suburban = residential, Rural = countryside"
+            )
+            income_level = st.selectbox(
+                "Neighborhood Income Level",
+                list(CONVERSION_PRESETS["income_level"].keys()),
+                index=1,
+                help="Average household income in your area"
+            )
+            
+            # Show what values are being used
+            with st.expander("🔍 See how we estimate your neighborhood"):
+                size_preset = CONVERSION_PRESETS["house_size"][house_size]
+                area_preset = CONVERSION_PRESETS["area_type"][area_type]
+                income_val = CONVERSION_PRESETS["income_level"][income_level]
+                age_val = CONVERSION_PRESETS["house_age"][house_age]
+                
+                st.write(f"""
+                **Your house:**
+                - Bedrooms: {size_preset['bedrooms']}
+                - Approximate rooms: {size_preset['rooms']}
+                - Age: {age_val} years (median for neighborhood)
+                
+                **Neighborhood estimates:**
+                - Type: {area_type}
+                - Similar homes in block: ~{area_preset['households']}
+                - People per household: ~{area_preset['density']:.1f}
+                - Median income: ${income_val * 10000:,.0f}/year
+                
+                **Census block aggregates (what the model sees):**
+                - Total rooms (all houses): {size_preset['rooms'] * area_preset['households']:,.0f}
+                - Total bedrooms (all houses): {size_preset['bedrooms'] * area_preset['households']:,.0f}
+                - Population: {int(area_preset['density'] * area_preset['households'])}
+                - Households: {area_preset['households']}
+                """)
+        
+        # Convert to census data
+        census_data = convert_simple_to_census(
+            house_size, area_type, income_level, house_age, 
+            ocean_proximity, latitude, longitude
         )
+        
+    else:  # Advanced mode
+        st.write("### Enter Census Block Data")
+        st.info("💡 These are aggregate statistics for an entire neighborhood/census block, not a single house")
+        
+        col1, col2 = st.columns(2)
 
-    # === Predict using loaded model ===
-    if st.button("� Predict Price", type="primary"):
-        # Prepare input data
-        input_data = pd.DataFrame([{
+        with col1:
+            longitude = st.number_input("Longitude", value=-122.23, key="long_adv",
+                                       help="East-West coordinate")
+            latitude = st.number_input("Latitude", value=37.88, key="lat_adv",
+                                      help="North-South coordinate")
+            housing_median_age = st.number_input("Housing Median Age (years)", value=41.0,
+                                                help="Median age of all houses in the block")
+            total_rooms = st.number_input("Total Rooms (entire block)", value=880.0,
+                                         help="Sum of ALL rooms across ALL houses in the block")
+
+        with col2:
+            total_bedrooms = st.number_input("Total Bedrooms (entire block)", value=129.0,
+                                            help="Sum of ALL bedrooms across ALL houses")
+            population = st.number_input("Population (entire block)", value=322.0,
+                                        help="Total number of residents in the census block")
+            households = st.number_input("Households (number of homes)", value=126.0,
+                                        help="Number of separate homes/families in the block")
+            median_income = st.number_input("Median Income (÷ $10k)", value=8.3252,
+                                           help="Median household income divided by $10,000 (e.g., 8.3 = $83,000)")
+            ocean_proximity = st.selectbox(
+                "Ocean Proximity",
+                ["NEAR BAY", "<1H OCEAN", "INLAND", "NEAR OCEAN", "ISLAND"],
+                index=0,
+                help="Distance to ocean/bay"
+            )
+        
+        # Use advanced inputs directly
+        census_data = {
             "longitude": longitude,
             "latitude": latitude,
             "housing_median_age": housing_median_age,
@@ -136,7 +287,12 @@ with tab1:
             "households": households,
             "median_income": median_income,
             "ocean_proximity": ocean_proximity
-        }])
+        }
+
+    # === Predict using loaded model ===
+    if st.button("🚀 Predict Price", type="primary"):
+        # Prepare input data from census_data dictionary
+        input_data = pd.DataFrame([census_data])
 
         try:
             # Load model and make prediction
@@ -151,6 +307,7 @@ with tab1:
             st.session_state.prediction = prediction
             st.session_state.input_data = input_data
             st.session_state.prepared_data = prepared_data
+            st.session_state.census_data = census_data  # Store for PDF generation
             
             st.success(f"### 💰 Estimated Median House Value: **${prediction:,.2f}**")
 
@@ -159,7 +316,7 @@ with tab1:
             st.info("💡 Make sure the model file exists in the artifacts/ directory")
 
     # === PDF Download Button (appears after any prediction) ===
-    if st.session_state.prediction is not None:
+    if st.session_state.prediction is not None and st.session_state.census_data is not None:
         st.write("---")  # Divider line
         
         if st.button("📄 Download Prediction Report as PDF"):
@@ -174,16 +331,18 @@ with tab1:
 
                 c.setFont("Helvetica", 12)
                 y = 690
+                
+                cd = st.session_state.census_data
                 fields = {
-                    "Longitude": longitude,
-                    "Latitude": latitude,
-                    "Housing Median Age": housing_median_age,
-                    "Total Rooms": total_rooms,
-                    "Total Bedrooms": total_bedrooms,
-                    "Population": population,
-                    "Households": households,
-                    "Median Income": median_income,
-                    "Ocean Proximity": ocean_proximity,
+                    "Longitude": cd["longitude"],
+                    "Latitude": cd["latitude"],
+                    "Housing Median Age": cd["housing_median_age"],
+                    "Total Rooms": cd["total_rooms"],
+                    "Total Bedrooms": cd["total_bedrooms"],
+                    "Population": cd["population"],
+                    "Households": cd["households"],
+                    "Median Income": f"${cd['median_income'] * 10000:,.0f}",
+                    "Ocean Proximity": cd["ocean_proximity"],
                     "Predicted House Value": f"${st.session_state.prediction:,.2f}",
                 }
 
@@ -202,41 +361,42 @@ with tab1:
                 )
 
     # === Neighborhood Stats Section ===
-    if st.session_state.prediction:
+    if st.session_state.prediction and st.session_state.census_data:
         st.write("### 📊 Neighborhood Facts")
+        
+        cd = st.session_state.census_data
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
             st.metric(
                 label="Median Income",
-                value=f"${median_income * 10000:,.0f}",
+                value=f"${cd['median_income'] * 10000:,.0f}",
                 delta="Regional data"
             )
         
         with col2:
             st.metric(
                 label="Population Density",
-                value=f"{population/households:.1f}",
+                value=f"{cd['population']/cd['households']:.1f}",
                 delta="People per household"
             )
         
         with col3:
             st.metric(
                 label="Avg Rooms",
-                value=f"{total_rooms/households:.1f}",
+                value=f"{cd['total_rooms']/cd['households']:.1f}",
                 delta="Per household"
             )
         
         st.info("""
-        📍 **Coming Soon:**  
-        • Education Score (Census API)  
-        • Crime Rate Index  
-        • School District Ratings  
-        • Walkability Score  
+        📍 **This prediction is based on:**  
+        • Neighborhood aggregate data (census block level)
+        • Similar homes in the area
+        • Local market conditions
         """)
     else:
-        st.info("💡 Predict price first to reveal neighborhood insights.")
+        st.info("💡 Enter property details above and click 'Predict Price' to see results")
 
 # === TAB 2: Map View ===
 with tab2:
