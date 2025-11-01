@@ -100,7 +100,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # === Create Tabs ===
-tab1, tab2, tab3 = st.tabs(["🏡 Predict Price", "🌍 Map View", "🔍 Explain Prediction"])
+tab1, tab2, tab3, tab4 = st.tabs(["🏡 Predict Price", "🌍 Map View", "🔍 Explain Prediction", "📁 Batch Upload"])
 
 # === TAB 1: Prediction ===
 with tab1:
@@ -242,12 +242,27 @@ with tab1:
 with tab2:
     st.write("### 🗺 Property Location")
     
+    # Map style selector
+    map_style = st.selectbox("Map Style", ["Street Map", "Satellite"])
+    
     # Create map centered on the property location
     m = folium.Map(
         location=[latitude, longitude], 
-        zoom_start=12,
-        tiles="OpenStreetMap"
+        zoom_start=12
     )
+    
+    # Add satellite tiles if selected
+    if map_style == "Satellite":
+        folium.TileLayer(
+            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+            attr="Esri World Imagery",
+            name="Satellite"
+        ).add_to(m)
+    else:
+        folium.TileLayer(
+            tiles="OpenStreetMap",
+            name="Street Map"
+        ).add_to(m)
     
     # Add marker with popup
     popup_text = f"Predicted Price: ${st.session_state.prediction:,.0f}" if st.session_state.prediction else "House Location"
@@ -361,3 +376,59 @@ with tab3:
         except Exception as e:
             st.error(f"🚨 SHAP Error: {e}")
             st.info("💡 This might take a few seconds on first run while SHAP initializes.")
+
+# === TAB 4: Batch Upload ===
+with tab4:
+    st.write("### 📁 Upload CSV for Batch Predictions")
+    
+    st.info("""
+    **CSV Format Required:**
+    Your CSV must include these columns:
+    - `longitude`, `latitude`, `housing_median_age`, `total_rooms`, `total_bedrooms`
+    - `population`, `households`, `median_income`, `ocean_proximity`
+    """)
+    
+    uploaded_file = st.file_uploader("Upload CSV file", type=["csv"])
+    
+    if uploaded_file:
+        try:
+            df = pd.read_csv(uploaded_file)
+            st.write("### 📋 Preview of Uploaded Data:")
+            st.dataframe(df.head(10))
+            
+            st.write(f"**Total rows:** {len(df)}")
+            
+            if st.button("🚀 Run Batch Predictions", type="primary"):
+                with st.spinner("Running predictions..."):
+                    # Load pipeline and predict
+                    pipeline = load_model()
+                    predictions = pipeline.predict(df)
+                    df["predicted_house_value"] = predictions
+                    
+                    st.success(f"✅ Predictions completed for {len(df)} properties!")
+                    
+                    # Show results preview
+                    st.write("### 📊 Results Preview:")
+                    st.dataframe(df.head(10))
+                    
+                    # Statistics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Average Predicted Price", f"${predictions.mean():,.2f}")
+                    with col2:
+                        st.metric("Minimum Price", f"${predictions.min():,.2f}")
+                    with col3:
+                        st.metric("Maximum Price", f"${predictions.max():,.2f}")
+                    
+                    # Download button
+                    csv_data = df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        label="⬇️ Download Results CSV",
+                        data=csv_data,
+                        file_name="housing_predictions.csv",
+                        mime="text/csv"
+                    )
+                    
+        except Exception as e:
+            st.error(f"⚠️ Error processing CSV: {e}")
+            st.info("💡 Make sure your CSV has all required columns with correct names.")
