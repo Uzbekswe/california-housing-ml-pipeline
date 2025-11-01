@@ -99,13 +99,38 @@ h1, h2, h3 {
 # === Sidebar Info Panel ===
 st.sidebar.title("ℹ️ About This App")
 st.sidebar.write("""
-Real-estate ML model trained on California Housing Dataset.
+Real-estate ML model trained on California Housing Dataset using scikit-learn.
 
-**Features:**
-- ML model with engineered features
-- Map visualization
-- Explainable AI (SHAP)
-- PDF export
+**🎯 Features:**
+- 🏡 **Dual Input Modes**
+  - Simple mode for individual houses
+  - Advanced mode for census data
+- 🗺️ **Interactive Maps**
+  - Street view & Satellite imagery
+  - Location markers & neighborhood zones
+- 🔍 **Explainable AI (SHAP)**
+  - Feature importance analysis
+  - Prediction breakdowns
+- 📄 **PDF Reports**
+  - Downloadable predictions
+  - Professional formatting
+- 📁 **Batch Processing**
+  - CSV upload for multiple properties
+  - Bulk predictions & export
+
+**🤖 Model:**
+- RandomForestRegressor with GridSearchCV
+- Custom feature engineering
+- R² Score: ~0.81 on test set
+""")
+
+st.sidebar.write("---")
+st.sidebar.write("**💡 Quick Start:**")
+st.sidebar.write("""
+1. Choose **Simple Mode** (recommended)
+2. Enter your property details
+3. Click **Predict Price**
+4. View results & download PDF!
 """)
 
 # === Initialize session state for prediction ===
@@ -402,75 +427,80 @@ with tab1:
 with tab2:
     st.write("### 🗺 Property Location")
     
-    # Map style selector
-    map_style = st.selectbox("Map Style", ["Street Map", "Satellite"])
-    
-    # Create map centered on the property location
-    m = folium.Map(
-        location=[latitude, longitude], 
-        zoom_start=12
-    )
-    
-    # Add satellite tiles if selected
-    if map_style == "Satellite":
-        folium.TileLayer(
-            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-            attr="Esri World Imagery",
-            name="Satellite"
-        ).add_to(m)
+    if st.session_state.census_data is None:
+        st.info("💡 Make a prediction in the '🏡 Predict Price' tab first to see the map.")
     else:
-        folium.TileLayer(
-            tiles="OpenStreetMap",
-            name="Street Map"
+        cd = st.session_state.census_data
+        
+        # Map style selector
+        map_style = st.selectbox("Map Style", ["Street Map", "Satellite"])
+        
+        # Create map centered on the property location
+        m = folium.Map(
+            location=[cd["latitude"], cd["longitude"]], 
+            zoom_start=12
+        )
+        
+        # Add satellite tiles if selected
+        if map_style == "Satellite":
+            folium.TileLayer(
+                tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+                attr="Esri World Imagery",
+                name="Satellite"
+            ).add_to(m)
+        else:
+            folium.TileLayer(
+                tiles="OpenStreetMap",
+                name="Street Map"
+            ).add_to(m)
+        
+        # Add marker with popup
+        popup_text = f"Predicted Price: ${st.session_state.prediction:,.0f}" if st.session_state.prediction else "House Location"
+        
+        folium.Marker(
+            location=[cd["latitude"], cd["longitude"]],
+            popup=folium.Popup(popup_text, max_width=200),
+            tooltip="Click for details",
+            icon=folium.Icon(color="red", icon="home", prefix="fa")
         ).add_to(m)
-    
-    # Add marker with popup
-    popup_text = f"Predicted Price: ${st.session_state.prediction:,.0f}" if st.session_state.prediction else "House Location"
-    
-    folium.Marker(
-        location=[latitude, longitude],
-        popup=folium.Popup(popup_text, max_width=200),
-        tooltip="Click for details",
-        icon=folium.Icon(color="red", icon="home", prefix="fa")
-    ).add_to(m)
-    
-    # Add a circle to show approximate neighborhood
-    folium.Circle(
-        location=[latitude, longitude],
-        radius=500,  # 500 meters
-        color="blue",
-        fill=True,
-        fillColor="blue",
-        fillOpacity=0.1,
-        popup="Neighborhood area"
-    ).add_to(m)
-    
-    # Display map
-    st_folium(m, width=900, height=500)
-    
-    # Property details
-    st.write("### 📍 Property Details")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write(f"""
-        **Location:**  
-        - Latitude: {latitude}  
-        - Longitude: {longitude}  
-        - Ocean Proximity: {ocean_proximity}
-        """)
-    
-    with col2:
-        st.write(f"""
-        **Property Info:**  
-        - Median Age: {housing_median_age} years  
-        - Total Rooms: {total_rooms:,.0f}  
-        - Households: {households:,.0f}
-        """)
-    
-    if st.session_state.prediction:
-        st.success(f"### 💰 Estimated Value: **${st.session_state.prediction:,.2f}**")
+        
+        # Add a circle to show approximate neighborhood
+        folium.Circle(
+            location=[cd["latitude"], cd["longitude"]],
+            radius=500,  # 500 meters
+            color="blue",
+            fill=True,
+            fillColor="blue",
+            fillOpacity=0.1,
+            popup="Neighborhood area"
+        ).add_to(m)
+        
+        # Display map
+        st_folium(m, width=900, height=500)
+        
+        # Property details
+        st.write("### 📍 Property Details")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write(f"""
+            **Location:**  
+            - Latitude: {cd["latitude"]}  
+            - Longitude: {cd["longitude"]}  
+            - Ocean Proximity: {cd["ocean_proximity"]}
+            """)
+        
+        with col2:
+            st.write(f"""
+            **Property Info:**  
+            - Median Age: {cd["housing_median_age"]} years  
+            - Total Rooms: {cd["total_rooms"]:,.0f}  
+            - Households: {cd["households"]:,.0f}
+            """)
+        
+        if st.session_state.prediction:
+            st.success(f"### 💰 Estimated Value: **${st.session_state.prediction:,.2f}**")
 
 # === TAB 3: SHAP Explainability ===
 with tab3:
