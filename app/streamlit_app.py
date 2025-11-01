@@ -1,14 +1,18 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
 import os
 import folium
 from streamlit_folium import st_folium
 from sklearn.base import BaseEstimator, TransformerMixin
+import joblib
+from pathlib import Path
 
-# Use Docker service name when running in containers, localhost otherwise
-API_URL = os.getenv("API_URL", "http://api:8000/predict")
+# Load model directly (for Streamlit Cloud deployment)
+@st.cache_resource
+def load_model():
+    model_path = Path(__file__).resolve().parents[1] / "artifacts" / "california_price_pipeline.joblib"
+    return joblib.load(model_path)
 
 # === Page config must be FIRST ===
 st.set_page_config(
@@ -78,9 +82,10 @@ with tab1:
             index=0
         )
 
-    # === Predict via API ===
-    if st.button("Predict Price", type="primary"):
-        payload = {
+    # === Predict using loaded model ===
+    if st.button("🔮 Predict Price", type="primary"):
+        # Prepare input data
+        input_data = pd.DataFrame([{
             "longitude": longitude,
             "latitude": latitude,
             "housing_median_age": housing_median_age,
@@ -90,21 +95,19 @@ with tab1:
             "households": households,
             "median_income": median_income,
             "ocean_proximity": ocean_proximity
-        }
+        }])
 
         try:
-            response = requests.post(API_URL, json=payload)
-            response_data = response.json()
-
-            prediction = response_data.get("prediction")
-            if prediction is not None:
-                st.session_state.prediction = prediction
-                st.success(f"### 💰 Estimated Median House Value: **${prediction:,.2f}**")
-            else:
-                st.error("❌ API returned no prediction")
+            # Load model and make prediction
+            pipeline = load_model()
+            prediction = pipeline.predict(input_data)[0]
+            
+            st.session_state.prediction = prediction
+            st.success(f"### 💰 Estimated Median House Value: **${prediction:,.2f}**")
 
         except Exception as e:
-            st.error(f"🚨 API Error: {e}")
+            st.error(f"🚨 Prediction Error: {e}")
+            st.info("💡 Make sure the model file exists in the artifacts/ directory")
 
     # === Neighborhood Stats Section ===
     if st.session_state.prediction:
