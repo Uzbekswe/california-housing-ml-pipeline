@@ -56,10 +56,18 @@ docker-compose up --build
 | Cloud deploy ready | ✅ |
 
 ## 🖼 Screenshots
-> Add 3 PNGs here:
-- notebook model training
-- API running
-- Streamlit with prediction & map
+
+### Notebook Training Results
+![Notebook Training](screenshots/notebook_training.png)
+
+### FastAPI Running
+![FastAPI Terminal](screenshots/fastapi_terminal.png)
+
+### Streamlit UI - Prediction
+![Streamlit Prediction](screenshots/streamlit_prediction.png)
+
+### Streamlit UI - Interactive Map
+![Streamlit Map View](screenshots/streamlit_map.png)
 
 ## 📦 Tech Stack
 - Python, Pandas, NumPy
