@@ -7,12 +7,22 @@ from streamlit_folium import st_folium
 from sklearn.base import BaseEstimator, TransformerMixin
 import joblib
 from pathlib import Path
+import shap
+import matplotlib.pyplot as plt
 
 # Load model directly (for Streamlit Cloud deployment)
 @st.cache_resource
 def load_model():
     model_path = Path(__file__).resolve().parents[1] / "artifacts" / "california_price_pipeline.joblib"
     return joblib.load(model_path)
+
+# Load SHAP explainer
+@st.cache_resource
+def load_explainer():
+    pipeline = load_model()
+    # Get the model from the pipeline (last step)
+    model = pipeline.named_steps['model']
+    return shap.TreeExplainer(model)
 
 # === Page config must be FIRST ===
 st.set_page_config(
@@ -24,6 +34,10 @@ st.set_page_config(
 # === Initialize session state for prediction ===
 if 'prediction' not in st.session_state:
     st.session_state.prediction = None
+if 'input_data' not in st.session_state:
+    st.session_state.input_data = None
+if 'prepared_data' not in st.session_state:
+    st.session_state.prepared_data = None
 
 # === Custom transformers (kept only for input UI consistency) ===
 rooms_ix, bedrooms_ix, population_ix, household_ix = 3, 4, 5, 6
@@ -59,7 +73,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # === Create Tabs ===
-tab1, tab2 = st.tabs(["🏡 Predict Price", "🌍 Map View"])
+tab1, tab2, tab3 = st.tabs(["🏡 Predict Price", "🌍 Map View", "🔍 Explain Prediction"])
 
 # === TAB 1: Prediction ===
 with tab1:
@@ -100,9 +114,17 @@ with tab1:
         try:
             # Load model and make prediction
             pipeline = load_model()
+            
+            # Store prepared data for SHAP (transform through preprocessing only)
+            prepared_data = pipeline.named_steps['preprocessing'].transform(input_data)
+            
             prediction = pipeline.predict(input_data)[0]
             
+            # Store in session state
             st.session_state.prediction = prediction
+            st.session_state.input_data = input_data
+            st.session_state.prepared_data = prepared_data
+            
             st.success(f"### 💰 Estimated Median House Value: **${prediction:,.2f}**")
 
         except Exception as e:
@@ -205,3 +227,67 @@ with tab2:
     if st.session_state.prediction:
         st.success(f"### 💰 Estimated Value: **${st.session_state.prediction:,.2f}**")
 
+# === TAB 3: SHAP Explainability ===
+with tab3:
+    st.write("### 🔍 Model Explainability for Last Prediction")
+    
+    if st.session_state.prediction is None:
+        st.info("💡 Run a prediction first in the '🏡 Predict Price' tab.")
+    else:
+        st.success(f"### 💡 Predicted Price: **${st.session_state.prediction:,.2f}**")
+        
+        try:
+            # Load explainer
+            explainer = load_explainer()
+            
+            # Compute SHAP values for the prepared data
+            shap_values = explainer.shap_values(st.session_state.prepared_data)
+            
+            st.write("#### 🎯 Feature Contributions")
+            st.write("Positive values (red) increase the predicted price, negative values (blue) decrease it.")
+            
+            # Force plot
+            st.write("##### Individual Prediction Breakdown")
+            fig, ax = plt.subplots(figsize=(12, 3))
+            shap.force_plot(
+                explainer.expected_value,
+                shap_values[0],
+                st.session_state.prepared_data[0],
+                matplotlib=True,
+                show=False
+            )
+            st.pyplot(fig, bbox_inches='tight')
+            plt.close()
+            
+            st.write("""
+            **How to read this plot:**
+            - Base value: Average house price the model learned
+            - Red bars push the prediction higher
+            - Blue bars push the prediction lower
+            - Final prediction shown at the top
+            """)
+            
+            # Bar plot for feature importance
+            st.write("#### 📊 Feature Importance (Overall Impact)")
+            fig2, ax2 = plt.subplots(figsize=(10, 6))
+            shap.summary_plot(
+                shap_values,
+                st.session_state.prepared_data,
+                plot_type="bar",
+                show=False
+            )
+            st.pyplot(fig2, bbox_inches='tight')
+            plt.close()
+            
+            st.info("""
+            **What is SHAP?**
+            
+            SHAP (SHapley Additive exPlanations) is a game-theoretic approach to explain the output of machine learning models.
+            It shows how each feature contributed to the final prediction.
+            
+            This makes the model's decisions transparent and interpretable — critical for real-world ML applications!
+            """)
+            
+        except Exception as e:
+            st.error(f"🚨 SHAP Error: {e}")
+            st.info("💡 This might take a few seconds on first run while SHAP initializes.")

@@ -9,3 +9,5 @@ streamlit
 requests
 folium
 streamlit-folium
+shap
+matplotlib
