@@ -1,5 +1,10 @@
 # 🏡 California Housing Price Prediction (End-to-End ML System)
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://california-housing-ml-pipeline.streamlit.app/)
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-Click_Here-brightgreen?style=for-the-badge)](https://california-housing-ml-pipeline.streamlit.app/)
+
+> **🌐 Live Application:** [https://california-housing-ml-pipeline.streamlit.app/](https://california-housing-ml-pipeline.streamlit.app/)
+
 ## 📌 Overview
 Full production-style ML project with dual-mode user interface for both homebuyers and data scientists:
 - **Dual Input Modes**: Simple mode for homebuyers, Advanced mode for census data
@@ -31,11 +36,10 @@ Notebook → Saved Pipeline → FastAPI → Streamlit UI → User
 
 ## 🚀 Quick Start Guide
 
-### Option 1: Use the Live App (Recommended)
-Visit the deployed application on Streamlit Cloud:
-```
-https://your-app-url.streamlit.app
-```
+### Option 1: Use the Live App (Recommended) 🌐
+**Try the app now:** [https://california-housing-ml-pipeline.streamlit.app/](https://california-housing-ml-pipeline.streamlit.app/)
+
+No installation required! Just visit the link above and start predicting California housing prices instantly.
 
 **Steps:**
 1. Select **🏡 Simple Mode** (recommended for most users)
@@ -209,11 +213,17 @@ california-housing-ml-pipeline/
 
 ## 🚢 Deployment
 
-### Streamlit Cloud (Recommended)
+### 🌐 Live Production App
+**Current Deployment:** [https://california-housing-ml-pipeline.streamlit.app/](https://california-housing-ml-pipeline.streamlit.app/)
+
+The app is deployed on **Streamlit Cloud** with automatic updates from the `main` branch.
+
+### Streamlit Cloud (Deploy Your Own)
 1. Fork this repository
-2. Connect to Streamlit Cloud
+2. Connect to [Streamlit Cloud](https://streamlit.io/cloud)
 3. Deploy from `main` branch
 4. Set `app/streamlit_app.py` as the main file
+5. Your app will be live at: `https://your-app-name.streamlit.app/`
 
 ### Docker Deployment
 ```bash
